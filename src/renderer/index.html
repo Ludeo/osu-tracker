@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: http: https:; connect-src ws: wss:"
+  />
+  <title>osu!mania Tracker</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="brand">osu!<span>mania</span> tracker</div>
+      <nav class="views" role="tablist">
+        <button type="button" class="view-tab active" data-view="tracker" role="tab" aria-selected="true">Tracker</button>
+        <button type="button" class="view-tab" data-view="game" role="tab" aria-selected="false">Game</button>
+        <button type="button" class="view-tab" data-view="recs" role="tab" aria-selected="false">Recommended</button>
+        <button type="button" class="view-tab" data-view="progress" role="tab" aria-selected="false">Progress</button>
+      </nav>
+    </div>
+    <div class="topbar-right">
+      <span id="api-limit" class="status hidden"></span>
+      <span id="tosu-status" class="status status-connecting" title="Connection to tosu">connecting…</span>
+      <button id="overlay-btn" class="btn btn-ghost hidden" title="Unlock the in-game overlays to drag them into place and resize them by their corner">⤧ Move overlays</button>
+      <button id="refresh-btn" class="btn btn-ghost" title="Reload scores">⟳ Refresh</button>
+      <button id="settings-btn" class="btn btn-ghost">⚙ Settings</button>
+    </div>
+  </header>
+
+  <main id="layout" class="layout">
+    <section id="view-tracker" class="content">
+      <div id="banner" class="banner hidden"></div>
+
+      <article id="now-playing" class="card now-playing">
+        <div id="np-bg" class="np-bg"></div>
+        <div class="np-body">
+          <div class="np-state" id="np-state">Waiting for osu!…</div>
+          <h1 class="np-title" id="np-title">No map detected</h1>
+          <div class="np-artist" id="np-artist">Start osu! and tosu, then select a map.</div>
+          <div class="np-meta" id="np-meta"></div>
+          <div class="np-skills" id="np-skills"></div>
+        </div>
+      </article>
+
+      <article id="pp-card" class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">PP by accuracy</h2>
+          <span id="pp-mods" class="muted"></span>
+        </div>
+        <div id="pp-mod-picker" class="mod-picker"></div>
+        <div id="pp-table" class="pp-table"><span class="muted">—</span></div>
+      </article>
+
+      <article id="best-card" class="card">
+        <h2 class="card-title">Your best</h2>
+        <div id="my-best" class="my-best empty">—</div>
+      </article>
+
+      <article id="timing-card" class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Hit timing</h2>
+          <span id="play-timing-note" class="muted"></span>
+        </div>
+        <div class="play-timing">
+          <div class="play-ur" title="Unstable rate: how spread out your hits are (10 × the standard deviation of your hit errors in ms). Lower is more consistent.">
+            <b id="play-ur">–</b><span>UR</span>
+            <span id="play-mean" class="muted"></span>
+          </div>
+          <div id="play-hist" class="hit-hist"></div>
+        </div>
+      </article>
+
+      <article id="lb-card" class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Friends leaderboard</h2>
+          <span id="lb-note" class="muted"></span>
+        </div>
+        <div id="lb-tabs" class="mod-picker" role="tablist"></div>
+        <ol id="leaderboard" class="leaderboard"></ol>
+      </article>
+    </section>
+
+    <!-- The tracker cards and the Friends panel are moved into the side columns while this view is open. -->
+    <section id="view-game" class="game hidden">
+      <div id="game-left" class="game-col"></div>
+      <article class="card game-stage">
+        <div class="card-title-row">
+          <h2 class="card-title">osu!</h2>
+          <div class="card-actions">
+            <span id="capture-note" class="muted"></span>
+            <button type="button" id="capture-select" class="btn btn-ghost btn-small">Select window</button>
+            <button type="button" id="capture-stop" class="btn btn-ghost btn-small hidden">Stop</button>
+          </div>
+        </div>
+        <div id="capture-area" class="capture-area">
+          <video id="capture-video" class="hidden" autoplay muted></video>
+          <div id="capture-empty" class="capture-empty">
+            <p>Show the osu! window here, with your scores around it.</p>
+            <button type="button" id="capture-start" class="btn">Select the osu! window</button>
+            <p class="hint">This is a live view. Play in the osu! window itself; input here doesn't reach the game.</p>
+          </div>
+          <ul id="capture-picker" class="capture-picker hidden"></ul>
+        </div>
+        <!-- Fills the space below the osu! window, which is sized to the window's own aspect ratio. -->
+        <div class="hud">
+          <div class="hud-panel hud-keys">
+            <div id="key-overlay" class="key-overlay"></div>
+            <div class="kps-total"><b id="kps-total">0</b><span>KPS</span></div>
+            <p id="keys-note" class="hint"></p>
+          </div>
+          <div class="hud-panel hud-play">
+            <div class="hud-pp">
+              <b id="hud-pp">–</b><span>pp</span>
+              <span id="hud-play-note" class="muted"></span>
+              <span id="hud-pace" class="pace"></span>
+            </div>
+            <div id="hud-judgements" class="judgements"></div>
+          </div>
+        </div>
+      </article>
+      <div id="game-right" class="game-col"></div>
+    </section>
+
+    <section id="view-recs" class="content hidden">
+      <div id="recs-banner" class="banner hidden"></div>
+
+      <article class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Your skill profile</h2>
+          <div class="card-actions">
+            <span id="profile-note" class="muted"></span>
+            <button type="button" id="profile-refresh" class="btn btn-ghost btn-small" title="Rescan the Songs folder and rebuild the profile from your current top plays">⟳ Rebuild</button>
+          </div>
+        </div>
+        <div id="profile" class="profile"><span class="muted">—</span></div>
+      </article>
+
+      <article class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Recommended maps</h2>
+          <span id="recs-note" class="muted"></span>
+        </div>
+        <div id="recs-focus" class="mod-picker" role="tablist"></div>
+        <div class="recs-filter">
+          <div id="recs-source" class="mod-picker" role="tablist" aria-label="Which maps to show"></div>
+          <span id="recs-online" class="muted"></span>
+        </div>
+        <p id="recs-hint" class="hint"></p>
+        <ol id="recs-list" class="recs-list"></ol>
+      </article>
+    </section>
+
+    <section id="view-progress" class="content hidden">
+      <div id="progress-banner" class="banner hidden"></div>
+
+      <article class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Session</h2>
+          <span id="session-note" class="muted"></span>
+        </div>
+        <div id="session"><span class="muted">—</span></div>
+        <div id="past-sessions"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Hit timing</h2>
+          <span id="timing-note" class="muted"></span>
+        </div>
+        <div id="timing"><span class="muted">—</span></div>
+      </article>
+
+      <article class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Skill progress</h2>
+          <div class="card-actions">
+            <span id="skills-note" class="muted"></span>
+            <button type="button" id="skills-update" class="btn btn-ghost btn-small" title="Rebuild your skill profile from your current plays and snapshot it">⟳ Update</button>
+          </div>
+        </div>
+        <div id="skill-source" class="mod-picker" role="tablist" aria-label="Rating history source"></div>
+        <div id="skill-chart"></div>
+        <div id="skill-readout" class="skill-readout"></div>
+        <div id="skill-legend" class="mod-picker"></div>
+        <div id="tracker-summary"></div>
+      </article>
+
+      <article class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Play history</h2>
+          <span id="history-note" class="muted"></span>
+        </div>
+        <div id="history-filter" class="mod-picker" role="tablist"></div>
+        <ol id="history-list" class="history-list"></ol>
+      </article>
+    </section>
+
+    <aside id="friends" class="sidebar card">
+      <h2 class="card-title">Friends</h2>
+      <form id="friend-form" class="friend-form" autocomplete="off">
+        <input id="friend-input" type="text" placeholder="osu! username" spellcheck="false" />
+        <button type="submit" class="btn">Add</button>
+      </form>
+      <div id="friend-error" class="form-error"></div>
+      <ul id="friend-list" class="friend-list"></ul>
+    </aside>
+  </main>
+
+  <div id="settings" class="drawer hidden" role="dialog" aria-labelledby="settings-title">
+    <form id="settings-form" class="drawer-panel">
+      <h2 id="settings-title">Settings</h2>
+
+      <label>
+        Your osu! username
+        <input name="username" type="text" spellcheck="false" placeholder="Leave empty to use the logged-in player" />
+      </label>
+
+      <fieldset>
+        <legend>osu! API (OAuth application)</legend>
+        <p class="hint">
+          Create one at
+          <a href="https://osu.ppy.sh/home/account/edit#oauth" target="_blank">osu.ppy.sh → Settings → OAuth</a>.
+          The callback URL can be anything, e.g. <code>http://localhost</code>.
+        </p>
+        <label>Client ID <input name="clientId" type="text" spellcheck="false" /></label>
+        <label>Client secret <input name="clientSecret" type="password" spellcheck="false" /></label>
+      </fieldset>
+
+      <label>
+        tosu WebSocket URL
+        <input name="tosuUrl" type="text" spellcheck="false" />
+        <span class="hint">Default: <code>ws://127.0.0.1:24050/websocket/v2</code> (gosumemory: <code>ws://127.0.0.1:24050/ws</code>)</span>
+      </label>
+
+      <label>
+        osu! Songs folder
+        <input name="songsFolder" type="text" spellcheck="false" placeholder="Leave empty to use the folder tosu reports" />
+        <span class="hint">Scanned for 4K maps to recommend, e.g. <code>~/.local/share/osu-wine/osu!/Songs</code>.</span>
+      </label>
+
+      <label class="checkbox">
+        <input name="switchToGame" type="checkbox" />
+        <span>
+          Switch to the Game view after picking a map
+          <span class="hint">When a recommended map has been imported into osu!, or its song select search has been copied.</span>
+        </span>
+      </label>
+
+      <label class="checkbox">
+        <input name="maniaTracker" type="checkbox" />
+        <span>
+          Use mania-tracker.com
+          <span class="hint">Adds the plays mania-tracker.com has tracked for you to your skill profile and play history, and shows its ratings, dan and rating history. Only your osu! user ID is sent.</span>
+        </span>
+      </label>
+
+      <label class="checkbox">
+        <input name="danLevels" type="checkbox" />
+        <span>
+          Estimate dan levels
+          <span class="hint">Shows your 4K dan, overall and per skill, worked out from the plays in your skill profile the way mania-tracker.com does it. Needs no extra requests.</span>
+        </span>
+      </label>
+
+      <label class="checkbox">
+        <input name="overlay" type="checkbox" />
+        <span>
+          In-game overlay
+          <span class="hint">Shows the live pp with the pp for an FC, and your keys with keys per second, in two small windows above osu! while you play. Use <b>Move overlays</b> at the top to drag them into place and resize them by their corner.</span>
+        </span>
+      </label>
+
+      <div class="drawer-actions">
+        <button type="button" id="settings-cancel" class="btn btn-ghost">Cancel</button>
+        <button type="submit" class="btn">Save</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+
+  <script src="tosu.js"></script>
+  <script src="playInfo.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

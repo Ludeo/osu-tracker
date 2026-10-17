@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src ws: wss:"
+  />
+  <title>osu!mania Tracker overlay</title>
+  <link rel="stylesheet" href="overlay.css" />
+</head>
+<body>
+  <div id="overlay" class="overlay idle">
+    <!-- Each overlay window shows one of these (?panel=pp or ?panel=keys). -->
+    <div id="pp-panel" class="panel hidden">
+      <div class="stat"><b id="pp">–</b><span>pp</span></div>
+      <div class="stat fc"><b id="pp-fc">–</b><span>if FC</span></div>
+      <div class="stat pace" title="Your accuracy against your PB's"><b id="pace">–</b><span>vs PB</span></div>
+    </div>
+
+    <div id="keys-panel" class="panel hidden">
+      <div id="keys" class="keys"></div>
+      <div class="kps-total"><b id="kps">0</b><span>KPS</span></div>
+    </div>
+
+    <button type="button" id="lock" class="lock hidden" title="Drag the overlays to move them, and their corner to resize them; lock them to play">Lock</button>
+    <div id="resize" class="resize hidden" title="Drag to resize"></div>
+  </div>
+
+  <script src="tosu.js"></script>
+  <script src="playInfo.js"></script>
+  <script src="overlay.js"></script>
+</body>
+</html>
