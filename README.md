@@ -5,6 +5,14 @@
 
 An Electron app that detects the map you're on in osu! and shows your best osu!mania score next to your friends' scores.
 
+## Preview
+
+![Tracker](./preview/tracker.png)
+![Game](./preview/game.png)
+![Recommended](./preview/recommended.png)
+![Progress](./preview/progress.png)
+![Overlays](./preview/overlays.png)
+
 ## How it works
 
 ```

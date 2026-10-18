@@ -1,6 +1,6 @@
 {
   "name": "osu-mania-tracker",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Shows your best osu!mania score and your friends' scores on the map you are currently playing",
   "main": "src/main/index.js",
   "desktopName": "osu-mania-tracker.desktop",
@@ -8,7 +8,7 @@
   "scripts": {
     "start": "electron .",
     "postinstall": "node node_modules/electron/install.js",
-    "check": "node --check src/main/index.js && node --check src/main/main.js && node --check src/main/overlay.js && node --check src/main/overlayProcess.js && node --check src/main/overlayPreload.js && node --check src/main/config.js && node --check src/main/osuApi.js && node --check src/main/maniaPp.js && node --check src/main/osuFile.js && node --check src/main/minacalc.js && node --check src/main/skillsets.js && node --check src/main/library.js && node --check src/main/profile.js && node --check src/main/recommend.js && node --check src/main/catalogue.js && node --check src/main/keyInput.js && node --check src/main/history.js && node --check src/main/maniaTracker.js && node --check src/main/dan.js && node --check src/main/preload.js && node --check src/renderer/renderer.js && node --check src/renderer/tosu.js && node --check src/renderer/playInfo.js && node --check src/renderer/overlay.js",
+    "check": "node --check src/main/index.js && node --check src/main/main.js && node --check src/main/overlay.js && node --check src/main/overlayProcess.js && node --check src/main/overlayPreload.js && node --check src/main/config.js && node --check src/main/osuApi.js && node --check src/main/maniaPp.js && node --check src/main/osuFile.js && node --check src/main/minacalc.js && node --check src/main/skillsets.js && node --check src/main/library.js && node --check src/main/profile.js && node --check src/main/recommend.js && node --check src/main/catalogue.js && node --check src/main/keyInput.js && node --check src/main/history.js && node --check src/main/maniaTracker.js && node --check src/main/dan.js && node --check src/main/replays.js && node --check src/main/preload.js && node --check src/renderer/renderer.js && node --check src/renderer/tosu.js && node --check src/renderer/playInfo.js && node --check src/renderer/overlay.js",
     "dist:linux": "electron-builder --linux --publish never",
     "build:minacalc": "sh native/build-minacalc.sh",
     "dist:win": "electron-builder --win --x64 --publish never"

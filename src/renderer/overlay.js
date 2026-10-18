@@ -1,5 +1,5 @@
-// The in-game overlays, one window each: the pp of the play in progress with the pp for an FC, and
-// the keys with keys per second (as in the Game view). Shown while playing and on the results
+// The in-game overlays, one window each: the pp of the play in progress with the pp for an FC, the
+// keys with keys per second (as in the Game view), and the judgements of the play. Shown while playing and on the results
 // screen; unlocked, they're always shown so they can be dragged into place and resized.
 
 /* global TosuClient, pickPb, paceOf, fmtPace */
@@ -7,7 +7,7 @@
 const $ = (id) => document.getElementById(id);
 const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
 
-const PANEL = new URLSearchParams(location.search).get('panel') === 'keys' ? 'keys' : 'pp';
+const PANEL = ['keys', 'judgements'].find((name) => name === new URLSearchParams(location.search).get('panel')) ?? 'pp';
 const KPS_WINDOW_MS = 1000;
 const KPS_REFRESH_MS = 50;
 const SHOWN_STATES = ['play', 'resultScreen'];
@@ -21,6 +21,7 @@ let keyLabels = ['D', 'F', 'J', 'K'];
 let keyPressed = [false, false, false, false];
 let keyPresses = [[], [], [], []]; // press times within the last KPS window, per column
 let keyCounts = [0, 0, 0, 0]; // presses since the current play started
+let shownHits = null; // the judgement counts on show
 
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -109,9 +110,28 @@ function onTosuData(next) {
     }
     if (next.gameFolder) watchKeys(next.gameFolder);
   }
+  if (PANEL === 'judgements') renderJudgements(next);
   state = next;
   updatePlayPb();
   render();
+}
+
+// ---------- judgements ----------
+
+/** Shows the play's count of each judgement; a box lights up when its count goes up during a play. */
+function renderJudgements(next) {
+  const hits = next.play?.hits ?? null;
+  const playing = next.state === 'play' && state?.state === 'play';
+  for (const box of $('judgements-panel').children) {
+    const count = hits?.[box.dataset.hit] ?? 0;
+    if (playing && count > (shownHits?.[box.dataset.hit] ?? 0)) {
+      box.classList.remove('lit');
+      void box.offsetWidth; // starts the animation over
+      box.classList.add('lit');
+    }
+    setText(box, fmtInt(count));
+  }
+  shownHits = hits;
 }
 
 // ---------- moving and resizing ----------

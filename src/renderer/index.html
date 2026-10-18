@@ -268,8 +268,37 @@
         <input name="overlay" type="checkbox" />
         <span>
           In-game overlay
-          <span class="hint">Shows the live pp with the pp for an FC, and your keys with keys per second, in two small windows above osu! while you play. Use <b>Move overlays</b> at the top to drag them into place and resize them by their corner.</span>
+          <span class="hint">Shows the overlays picked below in small windows above osu! while you play. Use <b>Move overlays</b> at the top to drag them into place and resize them by their corner.</span>
         </span>
+      </label>
+
+      <fieldset id="overlay-panels" class="overlay-panels">
+        <legend>Overlays</legend>
+        <label class="checkbox">
+          <input name="overlayPanels" value="pp" type="checkbox" />
+          <span>Live pp <span class="hint">The pp of the play so far, the pp for an FC, and your accuracy against your PB's.</span></span>
+        </label>
+        <label class="checkbox">
+          <input name="overlayPanels" value="keys" type="checkbox" />
+          <span>Keys <span class="hint">Your keys as you press them, with keys per second and presses this play.</span></span>
+        </label>
+        <label class="checkbox">
+          <input name="overlayPanels" value="judgements" type="checkbox" />
+          <span>Judgements <span class="hint">How many of each judgement you've got this play, MAX at the top to misses at the bottom; each lights up as you get one.</span></span>
+        </label>
+      </fieldset>
+
+      <label class="checkbox">
+        <input name="saveReplays" type="checkbox" />
+        <span>
+          Save replays of new PBs
+          <span class="hint">When a passed play is your best score or pp on the map, its replay is copied into the folder below, as pressing F2 on the results screen would. Without osu! API credentials, or on unsubmitted maps, it's compared with your local scores. If a replay of the same name is there already, you're asked what to do.</span>
+        </span>
+      </label>
+
+      <label class="replays-folder">
+        Replays folder
+        <input name="replaysFolder" type="text" spellcheck="false" placeholder="Leave empty to use osu!'s Replays folder" />
       </label>
 
       <div class="drawer-actions">

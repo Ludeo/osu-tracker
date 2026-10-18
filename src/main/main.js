@@ -1,7 +1,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, shell } = require('electron');
 const config = require('./config');
 const { OsuApi, compareScores, normalizeScore, stableAccuracy } = require('./osuApi');
 const { ppByAccuracy } = require('./maniaPp');
@@ -15,7 +15,8 @@ const { KeyInput } = require('./keyInput');
 const { History } = require('./history');
 const maniaTracker = require('./maniaTracker');
 const { estimateDan } = require('./dan');
-const { Overlay } = require('./overlay');
+const { Overlay, OVERLAY_PANELS } = require('./overlay');
+const replays = require('./replays');
 
 const api = new OsuApi();
 const MAX_PARALLEL_REQUESTS = 4;
@@ -171,21 +172,37 @@ function buildBoards(entries) {
 }
 
 function publicConfig() {
-  const { clientId, clientSecret, username, tosuUrl, songsFolder, switchToGame, maniaTracker: useManiaTracker, danLevels, overlay: showOverlay, friends } = config.load();
+  const {
+    clientId, clientSecret, username, tosuUrl, songsFolder, switchToGame, maniaTracker: useManiaTracker, danLevels, overlay: showOverlay,
+    saveReplays, replaysFolder, friends,
+  } = config.load();
   return {
-    clientId, clientSecret, username, tosuUrl, songsFolder, switchToGame, maniaTracker: useManiaTracker, danLevels, overlay: showOverlay, friends,
+    clientId, clientSecret, username, tosuUrl, songsFolder, switchToGame, maniaTracker: useManiaTracker, danLevels, overlay: showOverlay,
+    saveReplays, replaysFolder, friends,
+    overlayPanels: overlayPanels(),
     hasCredentials: Boolean(clientId && clientSecret),
   };
 }
 
-/** Starts or stops the in-game overlays to match the setting; `restart` picks up a new tosu URL. */
+/** The in-game overlays picked in the settings. */
+function overlayPanels() {
+  const { overlayPanels: panels } = config.load();
+  return Array.isArray(panels) ? OVERLAY_PANELS.filter((name) => panels.includes(name)) : OVERLAY_PANELS;
+}
+
+/**
+ * Starts or stops the in-game overlays to match the settings; `restart` picks up a new tosu URL
+ * or another choice of overlays.
+ */
 function applyOverlay(restart = false) {
   const { overlay: enabled, overlayLayout, overlayPosition } = config.load();
   const layout = overlayLayout && typeof overlayLayout === 'object' ? overlayLayout : {};
   // The single overlay of earlier versions became the pp one.
   if (!layout.pp && Array.isArray(overlayPosition)) layout.pp = { position: overlayPosition, scale: 1 };
-  if (!enabled || restart) overlay.stop();
-  if (enabled) overlay.start(layout);
+  const panels = overlayPanels();
+  const show = enabled && panels.length > 0;
+  if (!show || restart) overlay.stop();
+  if (show) overlay.start(layout, panels);
 }
 
 // ---------- recommendations ----------
@@ -204,12 +221,17 @@ const PP_CANDIDATES = 800; // maps around the player's level checked for pp
 const TOP_PLAYS = 100; // plays that count towards total pp
 const SOURCES = ['all', 'local', 'online'];
 
-/** The configured Songs folder, or the one tosu reports. */
-async function resolveSongsFolder(tosuFolder) {
-  let folder = config.load().songsFolder || tosuFolder || '';
+/** A folder from the settings or from tosu as a path here. */
+function localPath(folder) {
   // tosu running inside Wine reports Windows paths; Wine's Z: drive is the Linux root.
   if (process.platform !== 'win32' && /^z:[\\/]/i.test(folder)) folder = `/${folder.slice(3).replace(/\\/g, '/')}`;
   if (/^~(?=$|[\\/])/.test(folder)) folder = path.join(app.getPath('home'), folder.slice(1));
+  return folder;
+}
+
+/** The configured Songs folder, or the one tosu reports. */
+async function resolveSongsFolder(tosuFolder) {
+  const folder = localPath(config.load().songsFolder || tosuFolder || '');
   if (!folder) throw new Error('Set your osu! Songs folder in ⚙ Settings, or start tosu so it can be detected.');
   const stat = await fs.stat(folder).catch(() => null);
   if (!stat?.isDirectory()) throw new Error(`The Songs folder "${folder}" was not found. Check it in ⚙ Settings.`);
@@ -665,6 +687,7 @@ async function checkUserStats(userId) {
 /**
  * After a passed play on a submitted map: once osu! has submitted it, finds the score (same
  * judgements) for its pp and whether it's a new personal best, and checks the player's pp and rank.
+ * Returns { pb } (your best score or pp on the map) if the score was found, else null.
  */
 async function checkSubmittedScore(sender, play, user) {
   await new Promise((resolve) => setTimeout(resolve, SCORE_CHECK_DELAY_MS));
@@ -677,18 +700,76 @@ async function checkSubmittedScore(sender, play, user) {
   }
   await checkUserStats(user.id).catch(() => {});
   notifyHistory(sender);
+  if (!match) return null;
+  const ppBest = match.pp > 0 && scores.every((s) => s === match || !(s.pp >= match.pp));
+  return { pb: scores[0] === match || ppBest };
 }
 
-/** Rates a recorded play, adds it to the profile, and checks its score once it's submitted. */
-async function processRecordedPlay(sender, play, { playerName, songsFolder }) {
+let replayPrompts = Promise.resolve(); // asks about one replay name at a time
+
+/**
+ * Copies a passed play's replay into the replays folder, as F2 would, if it's a new PB: your best
+ * score or pp on the map by the osu! API's scores if osu! submitted it, else your best score among
+ * osu!'s local replays of the map. If a replay of that name is there already, asks what to do.
+ */
+async function saveReplay(sender, play, found, submitted) {
+  if (!found) return;
+  const { replay, others } = found;
+  if (!(submitted ? submitted.pb : replays.isLocalBest(replay, others))) return;
+  const { replaysFolder } = config.load();
+  // osu!'s own Replays folder is next to Data/r.
+  const dir = replaysFolder ? localPath(replaysFolder) : path.resolve(replay.file, '../../../Replays');
+  await fs.mkdir(dir, { recursive: true });
+  let name = replays.replayFileName({ player: replay.header.player, ...play }, new Date(play.at));
+  if (await replays.exists(path.join(dir, name))) {
+    const ask = replayPrompts.then(() => askAboutReplay(sender, dir, name));
+    replayPrompts = ask.catch(() => {});
+    name = await ask;
+    if (!name) return;
+  }
+  await fs.copyFile(replay.file, path.join(dir, name));
+  if (!sender.isDestroyed()) sender.send('replay:saved', name);
+}
+
+/** Asks whether to overwrite a replay of the same name, save under a numbered name, or skip. */
+async function askAboutReplay(sender, dir, name) {
+  const numbered = await replays.freeFileName(dir, name);
+  const win = sender.isDestroyed() ? null : BrowserWindow.fromWebContents(sender);
+  const options = {
+    type: 'question',
+    title: 'Replay already saved',
+    message: `There's already a replay named "${name}".`,
+    detail: `In ${dir}. Your new PB's replay can replace it, be saved as "${numbered}", or not be saved.`,
+    buttons: ['Overwrite', `Save as ${numbered.slice(numbered.lastIndexOf('('), -'.osr'.length)}`, 'Skip'],
+    defaultId: 1,
+    cancelId: 2,
+    noLink: true,
+  };
+  const { response } = await (win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options));
+  return [name, numbered, null][response];
+}
+
+/**
+ * Rates a recorded play, adds it to the profile, checks its score once it's submitted, and saves its
+ * replay if that's turned on and it's a PB.
+ */
+async function processRecordedPlay(sender, play, { playerName, songsFolder, gameFolder }) {
+  // osu! writes the replay once you leave the results screen; look for it meanwhile.
+  const replay = play.passed && config.load().saveReplays && gameFolder ? replays.findReplay(gameFolder, play).catch(() => null) : null;
   let user = null;
   if (api.hasCredentials) user = await currentUser(playerName).catch(() => null);
-  if (play.passed && isRateable(play)) {
-    play = await ratePlayInHistory(play, await songsChartLoader(songsFolder));
-    notifyHistory(sender);
-    if (user) await addToProfile(sender, play, user.id).catch(() => {});
+  let submitted = null;
+  try {
+    if (play.passed && isRateable(play)) {
+      play = await ratePlayInHistory(play, await songsChartLoader(songsFolder));
+      notifyHistory(sender);
+      if (user) await addToProfile(sender, play, user.id).catch(() => {});
+    }
+    if (user && play.passed && play.beatmapId > 0) submitted = await checkSubmittedScore(sender, play, user);
+  } finally {
+    // Without the API's verdict, the local replays decide whether it's a PB.
+    if (replay) await saveReplay(sender, play, await replay, submitted);
   }
-  if (user && play.passed && play.beatmapId > 0) await checkSubmittedScore(sender, play, user);
 }
 
 const lastImport = new Map(); // user ID -> time of the last import of recent plays
@@ -777,17 +858,22 @@ function registerIpc() {
   ipcMain.handle('api:rate-limit', () => api.rateLimit);
 
   ipcMain.handle('config:save', (_event, patch) => {
-    const allowed = ['clientId', 'clientSecret', 'username', 'tosuUrl', 'songsFolder', 'switchToGame', 'maniaTracker', 'danLevels', 'overlay'];
-    const flags = ['switchToGame', 'maniaTracker', 'danLevels', 'overlay'];
+    const allowed = [
+      'clientId', 'clientSecret', 'username', 'tosuUrl', 'songsFolder', 'switchToGame', 'maniaTracker', 'danLevels', 'overlay',
+      'saveReplays', 'replaysFolder',
+    ];
+    const flags = ['switchToGame', 'maniaTracker', 'danLevels', 'overlay', 'saveReplays'];
     const clean = Object.fromEntries(
       Object.entries(patch || {})
         .filter(([key]) => allowed.includes(key))
         .map(([key, value]) => [key, flags.includes(key) ? Boolean(value) : String(value ?? '').trim()]),
     );
+    if (Array.isArray(patch?.overlayPanels)) clean.overlayPanels = OVERLAY_PANELS.filter((name) => patch.overlayPanels.includes(name));
     // The profile's plays depend on this, so it's rebuilt on next use.
     if ('maniaTracker' in clean && clean.maniaTracker !== config.load().maniaTracker) profile = null;
     // The overlay reads tosu and the Songs folder (for the key bindings) when it starts.
-    const overlayRestart = ['tosuUrl', 'songsFolder'].some((key) => key in clean && clean[key] !== config.load()[key]);
+    const overlayRestart = ['tosuUrl', 'songsFolder'].some((key) => key in clean && clean[key] !== config.load()[key])
+      || ('overlayPanels' in clean && clean.overlayPanels.join() !== overlayPanels().join());
     config.save(clean);
     applyCredentials();
     applyOverlay(overlayRestart);
@@ -927,7 +1013,11 @@ function registerIpc() {
     const { play: stored, added } = await history.addPlay(play);
     notifyHistory(event.sender);
     if (!added) return;
-    processRecordedPlay(event.sender, stored, { playerName: String(raw.playerName ?? ''), songsFolder: String(raw.songsFolder ?? '') })
+    const songsFolder = String(raw.songsFolder ?? '');
+    // The Songs folder setting is a real path; tosu's folders can be Windows paths under Wine.
+    const configured = config.load().songsFolder;
+    const gameFolder = configured ? path.dirname(path.resolve(localPath(configured))) : localPath(String(raw.gameFolder ?? ''));
+    processRecordedPlay(event.sender, stored, { playerName: String(raw.playerName ?? ''), songsFolder, gameFolder })
       .catch(() => {
         // The play is recorded; its ratings or score check are missing.
       });

@@ -987,6 +987,7 @@ function finishAttempt(passed) {
     timing: timingSummary(stats.hitErrors, stats.mods),
     playerName: current?.playerName ?? '',
     songsFolder: current?.songsFolder ?? '',
+    gameFolder: current?.gameFolder ?? '',
   }).catch(() => {});
 }
 
@@ -1781,7 +1782,7 @@ function renderHistory() {
 
 // ---------- settings ----------
 
-const SETTINGS_KEYS = ['username', 'clientId', 'clientSecret', 'tosuUrl', 'songsFolder'];
+const SETTINGS_KEYS = ['username', 'clientId', 'clientSecret', 'tosuUrl', 'songsFolder', 'replaysFolder'];
 
 function openSettings() {
   const form = $('settings-form');
@@ -1790,8 +1791,23 @@ function openSettings() {
   form.elements.maniaTracker.checked = config.maniaTracker;
   form.elements.danLevels.checked = config.danLevels;
   form.elements.overlay.checked = config.overlay;
+  for (const box of form.elements.overlayPanels) box.checked = config.overlayPanels.includes(box.value);
+  renderOverlayPanels();
+  form.elements.saveReplays.checked = config.saveReplays;
+  renderReplaysFolder();
   $('settings').classList.remove('hidden');
   form.elements.username.focus();
+}
+
+/** The choice of overlays only applies while the overlay is on. */
+function renderOverlayPanels() {
+  $('overlay-panels').disabled = !$('settings-form').elements.overlay.checked;
+}
+
+/** The replays folder only applies while saving replays is on. */
+function renderReplaysFolder() {
+  const form = $('settings-form');
+  form.elements.replaysFolder.disabled = !form.elements.saveReplays.checked;
 }
 
 function closeSettings() {
@@ -1806,6 +1822,8 @@ async function saveSettings(event) {
   patch.maniaTracker = form.elements.maniaTracker.checked;
   patch.danLevels = form.elements.danLevels.checked;
   patch.overlay = form.elements.overlay.checked;
+  patch.overlayPanels = [...form.elements.overlayPanels].filter((box) => box.checked).map((box) => box.value);
+  patch.saveReplays = form.elements.saveReplays.checked;
   const urlChanged = patch.tosuUrl.trim() !== config.tosuUrl;
   const recsChanged = patch.songsFolder.trim() !== config.songsFolder || patch.username.trim() !== config.username
     || patch.maniaTracker !== config.maniaTracker || patch.danLevels !== config.danLevels;
@@ -1843,6 +1861,8 @@ async function init() {
   $('settings-btn').addEventListener('click', openSettings);
   $('settings-cancel').addEventListener('click', closeSettings);
   $('settings-form').addEventListener('submit', saveSettings);
+  $('settings-form').elements.overlay.addEventListener('change', renderOverlayPanels);
+  $('settings-form').elements.saveReplays.addEventListener('change', renderReplaysFolder);
   $('settings').addEventListener('click', (e) => { if (e.target === $('settings')) closeSettings(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSettings(); });
   $('refresh-btn').addEventListener('click', loadScores);
@@ -1855,6 +1875,7 @@ async function init() {
   $('capture-video').addEventListener('resize', fitCaptureArea);
   $('skills-update').addEventListener('click', updateProfileFromProgress);
   window.tracker.onHistoryUpdated(onHistoryUpdated);
+  window.tracker.onReplaySaved((name) => showToast(`Saved the replay of your new PB: ${name}`));
   window.tracker.onKey(onKey);
   window.tracker.onRecommendationsProgress(onRecommendationsProgress);
   window.tracker.onBeatmapImported(onBeatmapImported);

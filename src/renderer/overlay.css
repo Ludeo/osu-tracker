@@ -71,6 +71,31 @@ html, body {
 .kps-total b { font-size: 36px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
 .kps-total span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
 
+/* Judgements, best at the top: each box in its colour, lit up for a moment when one is received. */
+.judgements { flex-direction: column; align-items: stretch; gap: 6px; }
+.judgement {
+  --hit: #fff;
+  min-width: 72px;
+  padding: 6px 10px;
+  border: 2px solid var(--hit);
+  border-radius: 8px;
+  color: var(--hit);
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  text-shadow: 0 1px 2px #000;
+}
+.judgement[data-hit="300"] { --hit: #ffe14d; }
+.judgement[data-hit="200"] { --hit: #5be37a; }
+.judgement[data-hit="100"] { --hit: #4da3ff; }
+.judgement[data-hit="50"] { --hit: #b26bff; }
+.judgement[data-hit="miss"] { --hit: #ff4d4d; }
+.judgement.lit { animation: hit-flash .25s ease-out; }
+@keyframes hit-flash {
+  from { background: var(--hit); color: var(--bg); text-shadow: none; box-shadow: 0 0 12px var(--hit); }
+}
+
 .lock {
   padding: 4px 10px;
   border: 0;

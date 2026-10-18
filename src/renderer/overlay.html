@@ -11,7 +11,7 @@
 </head>
 <body>
   <div id="overlay" class="overlay idle">
-    <!-- Each overlay window shows one of these (?panel=pp or ?panel=keys). -->
+    <!-- Each overlay window shows one of these (?panel=pp, keys or judgements). -->
     <div id="pp-panel" class="panel hidden">
       <div class="stat"><b id="pp">–</b><span>pp</span></div>
       <div class="stat fc"><b id="pp-fc">–</b><span>if FC</span></div>
@@ -21,6 +21,15 @@
     <div id="keys-panel" class="panel hidden">
       <div id="keys" class="keys"></div>
       <div class="kps-total"><b id="kps">0</b><span>KPS</span></div>
+    </div>
+
+    <div id="judgements-panel" class="panel judgements hidden">
+      <div class="judgement" data-hit="max" title="MAX">0</div>
+      <div class="judgement" data-hit="300" title="300">0</div>
+      <div class="judgement" data-hit="200" title="200">0</div>
+      <div class="judgement" data-hit="100" title="100">0</div>
+      <div class="judgement" data-hit="50" title="50">0</div>
+      <div class="judgement" data-hit="miss" title="Miss">0</div>
     </div>
 
     <button type="button" id="lock" class="lock hidden" title="Drag the overlays to move them, and their corner to resize them; lock them to play">Lock</button>

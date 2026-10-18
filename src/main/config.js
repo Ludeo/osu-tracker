@@ -16,10 +16,16 @@ const DEFAULTS = Object.freeze({
   maniaTracker: true,
   // Estimate dan levels (4K regular) from the plays in the skill profile.
   danLevels: true,
-  // Live pp, and the keys with keys per second, in small windows kept above osu! (overlay.js), and
-  // where each was dragged to and how big: { pp: { position: [x, y], scale }, keys: ... }.
+  // Live pp, the keys with keys per second, and the judgements, in small windows kept above osu!
+  // (overlay.js): which of them are shown, and where each was dragged to and how big:
+  // { pp: { position: [x, y], scale }, keys: ... }.
   overlay: false,
+  overlayPanels: ['pp', 'keys', 'judgements'],
   overlayLayout: {},
+  // Copy the replay of every new PB (best score or pp on the map) into replaysFolder, as F2 on the
+  // results screen would. If empty, osu!'s own Replays folder is used.
+  saveReplays: false,
+  replaysFolder: '',
   // [{ id, username, avatarUrl, countryCode }]
   friends: [],
 });

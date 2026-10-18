@@ -344,6 +344,10 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .drawer-panel label.checkbox { flex-direction: row; align-items: flex-start; gap: 8px; }
 .drawer-panel label.checkbox .hint { display: block; margin-top: 4px; }
 .drawer-panel legend { color: var(--muted); padding: 0 6px; }
+.overlay-panels { margin: -6px 0 0 24px; }
+.overlay-panels:disabled { opacity: .5; }
+.replays-folder { margin: -6px 0 0 24px; }
+.replays-folder:has(input:disabled) { opacity: .5; }
 .hint { font-size: 12px; font-weight: 400; color: var(--muted); margin: 0; }
 .drawer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: auto; }
 

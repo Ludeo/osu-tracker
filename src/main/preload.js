@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('tracker', {
   playStarted: (query) => invoke('history:play-started', query),
   recordPlay: (play) => invoke('history:record', play),
   onHistoryUpdated: (callback) => ipcRenderer.on('history:updated', () => callback()),
+  onReplaySaved: (callback) => ipcRenderer.on('replay:saved', (_event, name) => callback(name)),
   getRateLimit: () => invoke('api:rate-limit'),
   onRateLimit: (callback) => ipcRenderer.on('api:rate-limit', (_event, rateLimit) => callback(rateLimit)),
 });

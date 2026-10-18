@@ -1,14 +1,15 @@
-// The overlay's own process (started by overlay.js): two small frameless, transparent windows kept
-// above osu!, one with the pp and one with the keys and keys per second, which clicks go through
-// while they're locked. It reads tosu and the keyboard itself, so it keeps up while the app's window
+// The overlay's own process (started by overlay.js): small frameless, transparent windows kept
+// above osu!, one per overlay picked in the settings (the pp, the keys with keys per second, the
+// judgements), which clicks go through while they're locked. It reads tosu and the keyboard itself, so it keeps up while the app's window
 // is minimised or behind the game.
 
+const net = require('node:net');
 const path = require('node:path');
 const { app, BrowserWindow, ipcMain, screen, session } = require('electron');
 const config = require('./config');
 const { KeyInput } = require('./keyInput');
+const { IPC_FLAG, PANELS_FLAG, OVERLAY_PANELS } = require('./overlay');
 
-const PANELS = ['pp', 'keys'];
 const MARGIN = 24;
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 4;
@@ -22,16 +23,29 @@ const panels = {}; // name -> { win, size: [w, h] at scale 1, or null until the 
 let locked = true;
 let pb = null; // { checksum, scores } from the app, for the pp overlay
 
-/** Tells the app something, one JSON message per line on stdout. */
+/** The value of a `--name=value` argument from the app. */
+function argument(name) {
+  const arg = process.argv.find((a) => a.startsWith(`${name}=`));
+  return arg?.slice(name.length + 1);
+}
+
+// The overlays to show, from the app.
+const PANELS = OVERLAY_PANELS.filter((name) => (argument(PANELS_FLAG) ?? '').split(',').includes(name));
+
+// The connection to the app (see overlay.js); when the app goes away, so does the overlay.
+const ipc = net.connect(argument(IPC_FLAG) ?? '');
+ipc.on('error', () => app.quit());
+ipc.on('close', () => app.quit());
+
+/** Tells the app something, one JSON message per line. */
 function report(message) {
-  process.stdout.write(`${JSON.stringify(message)}\n`);
+  if (ipc.writable) ipc.write(`${JSON.stringify(message)}\n`);
 }
 
 /** Where each panel was left and how big it was, from the app: { pp: { position, scale }, ... }. */
 function savedLayout() {
-  const arg = process.argv.find((a) => a.startsWith('--overlay-layout='));
   try {
-    return JSON.parse(arg.slice(arg.indexOf('=') + 1)) ?? {};
+    return JSON.parse(argument('--overlay-layout')) ?? {};
   } catch {
     return {};
   }
@@ -47,11 +61,16 @@ function savedPosition(position) {
   return Number.isFinite(x) && Number.isFinite(y) && onScreen ? [x, y] : null;
 }
 
-/** First time (or when the saved screen is gone): pp at the top centre of the main screen, keys at its left. */
+/**
+ * First time (or when the saved screen is gone): pp at the top centre of the main screen, keys at
+ * its left, judgements at its right.
+ */
 function defaultPosition(name, [width, height]) {
   const { workArea } = screen.getPrimaryDisplay();
   if (name === 'pp') return [Math.round(workArea.x + (workArea.width - width) / 2), workArea.y + MARGIN];
-  return [workArea.x + MARGIN, Math.round(workArea.y + (workArea.height - height) / 2)];
+  const y = Math.round(workArea.y + (workArea.height - height) / 2);
+  if (name === 'judgements') return [Math.round(workArea.x + workArea.width - width - MARGIN), y];
+  return [workArea.x + MARGIN, y];
 }
 
 /** Sizes a panel's window to its content at its scale; shows it the first time. */
@@ -176,10 +195,10 @@ function registerIpc() {
   });
 }
 
-// Commands from the app on stdin; when the app goes away, so does the overlay.
+// Commands from the app.
 let input = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (chunk) => {
+ipc.setEncoding('utf8');
+ipc.on('data', (chunk) => {
   const lines = (input + chunk).split('\n');
   input = lines.pop();
   for (const line of lines) {
@@ -196,8 +215,6 @@ process.stdin.on('data', (chunk) => {
     }
   }
 });
-process.stdin.on('end', () => app.quit());
-process.stdout.on('error', () => app.quit());
 
 app.whenReady().then(async () => {
   registerIpc();
