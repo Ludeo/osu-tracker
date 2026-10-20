@@ -2,14 +2,18 @@
 // the osu! client's memory and publish the current game state over a local WebSocket.
 // Supports tosu's v2 endpoint (/websocket/v2) and the gosumemory-compatible legacy endpoint (/ws).
 
-/* exported TosuClient */
+/* exported TosuClient, isResultsScreen */
 
 // gosumemory numeric states -> tosu v2 state names.
 const LEGACY_STATES = {
-  0: 'menu', 1: 'edit', 2: 'play', 3: 'exit', 4: 'selectEdit', 5: 'selectPlay', 6: 'selectDrank',
-  7: 'resultScreen', 11: 'selectMulti', 12: 'rankingVs', 13: 'onlineSelection', 14: 'optionsOffsetWizard',
-  15: 'rankingTagCoop', 16: 'rankingTeam', 22: 'tourney',
+  0: 'menu', 1: 'edit', 2: 'play', 3: 'exit', 4: 'selectEdit', 5: 'selectPlay', 6: 'selectDrawings',
+  7: 'resultScreen', 11: 'lobby', 12: 'matchSetup', 13: 'selectMulti', 14: 'rankingVs', 15: 'onlineSelection',
+  16: 'optionsOffsetWizard', 17: 'rankingTagCoop', 18: 'rankingTeam', 22: 'tourney',
 };
+
+// After a multiplayer play osu! shows the match's results (one screen per team mode) instead.
+const RESULTS_SCREENS = ['resultScreen', 'rankingVs', 'rankingTeam', 'rankingTagCoop'];
+const isResultsScreen = (state) => RESULTS_SCREENS.includes(state);
 
 function normalizeTosuData(data) {
   if (data && data.beatmap && data.state) {
@@ -38,7 +42,8 @@ function normalizeTosuData(data) {
       songsFolder: data.folders?.songs ?? '',
       gameFolder: data.folders?.game ?? '',
       // The play in progress, or the one on the results screen. The hit errors stay with the
-      // play: the results screen has none of its own.
+      // play: the results screen has none of its own. The multiplayer results have no resultsScreen
+      // data, but the play's stays.
       play: data.state.name === 'resultScreen' && data.resultsScreen
         ? playStats(data.resultsScreen, data.resultsScreen.accuracy, data.resultsScreen.pp, data.resultsScreen.maxCombo,
           data.resultsScreen.playerName ?? data.resultsScreen.name, data.resultsScreen.mods, data.play?.hitErrorArray)
@@ -106,6 +111,8 @@ function playStats(source, accuracy, pp, maxCombo, player, mods, hitErrors) {
     ppFc: pp?.fc ?? null,
     maxCombo: maxCombo ?? null,
     hitErrors: Array.isArray(hitErrors) ? hitErrors : [],
+    // In multiplayer a failed play carries on to the end.
+    failed: Boolean(source.failed),
   };
 }
 

@@ -2,7 +2,7 @@
 // keys with keys per second (as in the Game view), and the judgements of the play. Shown while playing and on the results
 // screen; unlocked, they're always shown so they can be dragged into place and resized.
 
-/* global TosuClient, pickPb, paceOf, fmtPace */
+/* global TosuClient, isResultsScreen, pickPb, paceOf, fmtPace */
 
 const $ = (id) => document.getElementById(id);
 const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
@@ -10,7 +10,6 @@ const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
 const PANEL = ['keys', 'judgements'].find((name) => name === new URLSearchParams(location.search).get('panel')) ?? 'pp';
 const KPS_WINDOW_MS = 1000;
 const KPS_REFRESH_MS = 50;
-const SHOWN_STATES = ['play', 'resultScreen'];
 
 let locked = true;
 let state = null;
@@ -35,7 +34,7 @@ function setText(node, text) {
 }
 
 function render() {
-  $('overlay').classList.toggle('idle', locked && !SHOWN_STATES.includes(state?.state));
+  $('overlay').classList.toggle('idle', locked && !(state?.state === 'play' || isResultsScreen(state?.state)));
   $('overlay').classList.toggle('unlocked', !locked);
   $('lock').classList.toggle('hidden', locked);
   $('resize').classList.toggle('hidden', locked);

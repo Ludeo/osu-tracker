@@ -1,4 +1,4 @@
-/* global TosuClient */
+/* global TosuClient, isResultsScreen */
 
 const MANIA_MODE = 3;
 const MAP_CHANGE_DEBOUNCE_MS = 500;
@@ -13,6 +13,9 @@ const STATE_LABELS = {
   selectEdit: 'Editor song select',
   selectMulti: 'Multiplayer song select',
   resultScreen: 'Results',
+  rankingVs: 'Multiplayer results',
+  rankingTeam: 'Multiplayer results',
+  rankingTagCoop: 'Multiplayer results',
   lobby: 'Multiplayer lobby',
   matchSetup: 'Multiplayer room',
 };
@@ -516,7 +519,7 @@ function onTosuData(next) {
   const prev = current;
   current = next;
   // The results screen has no hit errors of its own; they're the play's.
-  if (next.state === 'resultScreen' && next.play && !next.play.hitErrors.length && prev?.play?.hitErrors.length) {
+  if (isResultsScreen(next.state) && next.play && !next.play.hitErrors.length && prev?.play?.hitErrors.length) {
     next.play.hitErrors = prev.play.hitErrors;
   }
   updatePlayPb(next);
@@ -554,7 +557,7 @@ function onTosuData(next) {
   trackPlay(prev, next);
   renderPlayHud();
 
-  if (stateChanged && next.state === 'resultScreen') {
+  if (stateChanged && isResultsScreen(next.state)) {
     clearTimeout(resultTimer);
     resultTimer = setTimeout(loadScores, RESULT_SCREEN_REFRESH_MS);
   }
@@ -817,7 +820,7 @@ function stopKeyOverlay() {
 let lastPlay = null; // { state, stats, od } of the latest play seen, kept after leaving it
 
 function renderPlayHud() {
-  if (current && (current.state === 'play' || current.state === 'resultScreen') && current.play) {
+  if (current && (current.state === 'play' || isResultsScreen(current.state)) && current.play) {
     lastPlay = { state: current.state, stats: current.play, od: current.od };
   }
   renderTiming();
@@ -917,41 +920,43 @@ function setText(node, text) {
 const MIN_RECORDED_HITS = 20; // attempts restarted sooner aren't recorded
 // Judgements that arrive with the results screen beyond the last ones seen during the play.
 const MAX_RESULT_EXTRA_HITS = 30;
-let attempt = null; // { startedAt, map, stats, finishing } of the play in progress
+let attempt = null; // { startedAt, map, stats, finishing, failed } of the play in progress
 
 const hitTotal = (hits) => (hits ? Object.values(hits).reduce((a, b) => a + b, 0) : 0);
 
 /**
  * Follows plays in tosu and records each attempt in the play history: passed when the results
- * screen comes up, failed or quit when the play is left or restarted before that.
+ * screen comes up (unless failed in multiplayer, where the play carries on), failed or quit when
+ * the play is left or restarted before that.
  */
 function trackPlay(prev, next) {
   if (next.state === 'play') {
     const restarted = attempt && !attempt.finishing && hitTotal(next.play?.hits) < hitTotal(attempt.stats?.hits);
     if (!attempt || prev?.state !== 'play' || restarted) {
-      if (attempt) finishAttempt(attempt.finishing);
+      if (attempt) finishAttempt(attempt.finishing && !attempt.failed);
       startAttempt(next);
     }
     if (hitTotal(next.play?.hits) > 0) attempt.stats = next.play;
+    if (next.play?.failed) attempt.failed = true;
     return;
   }
   if (!attempt) return;
-  if (prev?.state === 'play' && next.state === 'resultScreen') attempt.finishing = true;
+  if (prev?.state === 'play' && isResultsScreen(next.state)) attempt.finishing = true;
   if (!attempt.finishing) {
     finishAttempt(false);
     return;
   }
-  if (next.state === 'resultScreen') {
+  if (isResultsScreen(next.state)) {
     // The results can take a moment to replace the previous ones.
     const last = hitTotal(attempt.stats?.hits);
     const total = hitTotal(next.play?.hits);
     if (total >= last && total <= last + MAX_RESULT_EXTRA_HITS) {
       attempt.stats = next.play;
-      finishAttempt(true);
+      finishAttempt(!attempt.failed);
     }
     return;
   }
-  finishAttempt(true); // left the results screen before they came in
+  finishAttempt(!attempt.failed); // left the results screen before they came in
 }
 
 function startAttempt(s) {
@@ -964,6 +969,7 @@ function startAttempt(s) {
     },
     stats: null,
     finishing: false,
+    failed: false,
   };
   window.tracker.playStarted({ playerName: s.playerName }).catch(() => {});
 }

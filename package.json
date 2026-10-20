@@ -1,6 +1,6 @@
 {
   "name": "osu-mania-tracker",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Shows your best osu!mania score and your friends' scores on the map you are currently playing",
   "main": "src/main/index.js",
   "desktopName": "osu-mania-tracker.desktop",
